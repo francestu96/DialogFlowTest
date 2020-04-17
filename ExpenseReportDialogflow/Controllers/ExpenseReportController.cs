@@ -81,7 +81,7 @@ namespace API.Controllers
             var request = new DetectIntentRequest
             {
                 SessionAsSessionName = new SessionName(project, "us", userSession),
-                QueryParams = new QueryParameters(),
+                QueryParams = new QueryParameters{},
                 QueryInput = query
             };
 

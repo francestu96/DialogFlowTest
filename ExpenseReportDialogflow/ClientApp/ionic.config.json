@@ -1,7 +1,0 @@
-{
-  "name": "ExpenseReport",
-  "integrations": {
-    "cordova": {}
-  },
-  "type": "angular"
-}
