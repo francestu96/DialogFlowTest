@@ -53,9 +53,7 @@ namespace API.Controllers
                 CredentialsPath = credentialsPath
             };
             var client = clientBuilder.Build();
-
-            var requestTest = new DetectIntentRequest();
-
+            
             var query = new QueryInput()
             {
                 Text = new TextInput()
@@ -65,6 +63,8 @@ namespace API.Controllers
                 }
             };
 
+            //se l'utente non ha avuto conversazioni, creo un nuovo record nella CacheMemory
+            //con chiave lo username (in realta l hash md5) e con valore la sessione (un guid casuale)
             var userKey = Encoding.ASCII.GetString(CryptoService.ComputeHash(Encoding.ASCII.GetBytes(UserService.User.Identity.Name)));
             if (!Cache.TryGetValue(userKey, out string userSession))
             {
@@ -72,16 +72,23 @@ namespace API.Controllers
                 Cache.Set(userKey, userSession);
             }
 
-            var tenantEntity = new SessionEntityType
+            //entità di prova da esportare in futuro come constanti
+            var ubiEntity = new SessionEntityType
             {
                 Name = new SessionName(project, "us", userSession) + "/entityTypes/ExpenseType",
-                EntityOverrideMode = new SessionEntityType.Types.EntityOverrideMode()
+                EntityOverrideMode = new SessionEntityType.Types.EntityOverrideMode(),                
+                //TODO: capire come assegnare la property entities che però è readonly
+                //Entities = ""
             };
 
             var request = new DetectIntentRequest
             {
                 SessionAsSessionName = new SessionName(project, "us", userSession),
-                QueryParams = new QueryParameters{},
+                QueryParams = new QueryParameters
+                {
+                    //TODO: capire come assegnare la property entities che però è readonly
+                    //SessionEntityTypes = ""
+                },
                 QueryInput = query
             };
 
@@ -90,6 +97,7 @@ namespace API.Controllers
                 query
             );
 
+            //se la conversazione ha risolto tutti i prametri richiesti, eseguo la insert della spesa
             if (dialogFlow.QueryResult.AllRequiredParamsPresent)
             {
                 var expenseModel = Mapper.Map<ExpenseModel>(dialogFlow);
