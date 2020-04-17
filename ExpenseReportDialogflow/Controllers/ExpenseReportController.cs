@@ -11,6 +11,8 @@ using System.Text;
 using System;
 using Google.Protobuf.Collections;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using ExpenseReportDialogflow.Util;
 
 namespace API.Controllers
 {
@@ -18,13 +20,21 @@ namespace API.Controllers
     [Route("[controller]")]
     public class ExpenseReportController : Controller
     {
+        private static class ConfigurationKeys
+        {
+            public const string GoogleCredentials = "Dialogflow:Credentials";
+            public const string DialogflowProject = "Dialogflow:Credentials:project_id";
+        }
+
         private readonly ILogger<ExpenseReportController> Logger;
         private readonly IMapper Mapper;
         private readonly ICurrentUserService UserService;
+        private readonly SessionsClientBuilder ClientBuilder;
         private IMemoryCache Cache;
         private MD5CryptoServiceProvider CryptoService;
 
         public ExpenseReportController(
+            IConfiguration cfg,
             IMapper mapper, 
             ICurrentUserService userService, 
             IMemoryCache cache, 
@@ -35,24 +45,38 @@ namespace API.Controllers
             Cache = cache;
             Logger = logger;
             CryptoService = new MD5CryptoServiceProvider();
+
+            // Get Google credentials from configuration
+            var credentialsSection = cfg.GetSection(ConfigurationKeys.GoogleCredentials);
+            if(!credentialsSection.Exists()) {
+                throw new ArgumentException($"Google credentials were not provided. Configuration path: {ConfigurationKeys.GoogleCredentials}.");
+            }
+            // Cache project name from configuration
+            if (cfg.GetValue<string>(ConfigurationKeys.DialogflowProject, null) is { } project) {
+                Cache.Set(ConfigurationKeys.DialogflowProject, project);
+            }
+            else {
+                throw new ArgumentException($"Dialogflow project name was not provided. Configuration path: {ConfigurationKeys.DialogflowProject}.");
+            }
+            // Prepare session client builder
+            ClientBuilder = new SessionsClientBuilder {
+                CredentialsPath = new ConfigurationSerializer(credentialsSection).ToJson(),
+            };
+        }
+
+        protected SessionName GetSessionName(string userKey, string locationId)
+        {
+            if (!Cache.TryGetValue(userKey, out string userSession)) {
+                userSession = Guid.NewGuid().ToString();
+                Cache.Set(userKey, userSession);
+            }
+            return new SessionName(Cache.Get<string>(ConfigurationKeys.DialogflowProject), locationId, userSession);
         }
 
         [HttpPost]
         public async Task<ActionResult<string>> Query([FromBody] MessageModel message)
         {
-            const string project = "expensereportagent-aeprpn";
-            const string credentialsPath = "Credentials/google.json";
-
-            if (!System.IO.File.Exists(credentialsPath))
-            {
-                return BadRequest("No Google credentials provided.");
-            }
-
-            var clientBuilder = new SessionsClientBuilder
-            {
-                CredentialsPath = credentialsPath
-            };
-            var client = clientBuilder.Build();
+            var client = ClientBuilder.Build();
             
             var query = new QueryInput()
             {
@@ -66,16 +90,12 @@ namespace API.Controllers
             //se l'utente non ha avuto conversazioni, creo un nuovo record nella CacheMemory
             //con chiave lo username (in realta l hash md5) e con valore la sessione (un guid casuale)
             var userKey = Encoding.ASCII.GetString(CryptoService.ComputeHash(Encoding.ASCII.GetBytes(UserService.User.Identity.Name)));
-            if (!Cache.TryGetValue(userKey, out string userSession))
-            {
-                userSession = Guid.NewGuid().ToString();
-                Cache.Set(userKey, userSession);
-            }
+            var sessionName = GetSessionName(userKey, "us");
 
             //entità di prova da esportare in futuro come constanti
             var ubiEntity = new SessionEntityType
             {
-                Name = new SessionName(project, "us", userSession) + "/entityTypes/ExpenseType",
+                Name = sessionName + "/entityTypes/ExpenseType",
                 EntityOverrideMode = new SessionEntityType.Types.EntityOverrideMode(),                
                 //TODO: capire come assegnare la property entities che però è readonly
                 //Entities = ""
@@ -83,7 +103,7 @@ namespace API.Controllers
 
             var request = new DetectIntentRequest
             {
-                SessionAsSessionName = new SessionName(project, "us", userSession),
+                SessionAsSessionName = sessionName,
                 QueryParams = new QueryParameters
                 {
                     //TODO: capire come assegnare la property entities che però è readonly
@@ -93,7 +113,7 @@ namespace API.Controllers
             };
 
             var dialogFlow = await client.DetectIntentAsync(
-                new SessionName(project, "us", userSession),
+                sessionName,
                 query
             );
 
