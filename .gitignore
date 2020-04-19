@@ -330,8 +330,8 @@ ASALocalRun/
 .mfractor/
 
 # Appsettings
-appsettings.json
-appsettings.*.json
+# appsettings.json
+# appsettings.*.json
 
 # Azure
 pipelines/
