@@ -13,6 +13,10 @@ using Google.Protobuf.Collections;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using ExpenseReportDialogflow.Util;
+using System.Collections.Generic;
+using ExpenseReportDialogflow.SessionEntities;
+using Newtonsoft.Json;
+using System.Linq;
 
 namespace API.Controllers
 {
@@ -58,9 +62,11 @@ namespace API.Controllers
             else {
                 throw new ArgumentException($"Dialogflow project name was not provided. Configuration path: {ConfigurationKeys.DialogflowProject}.");
             }
+
+            var jsonCredentials = JsonConvert.SerializeObject(credentialsSection.GetChildren().ToDictionary(k => k.Key, v => v.Value), Formatting.Indented);
             // Prepare session client builder
             ClientBuilder = new SessionsClientBuilder {
-                CredentialsPath = new ConfigurationSerializer(credentialsSection).ToJson(),
+                JsonCredentials = jsonCredentials
             };
         }
 
@@ -87,35 +93,20 @@ namespace API.Controllers
                 }
             };
 
-            //se l'utente non ha avuto conversazioni, creo un nuovo record nella CacheMemory
-            //con chiave lo username (in realta l hash md5) e con valore la sessione (un guid casuale)
             var userKey = Encoding.ASCII.GetString(CryptoService.ComputeHash(Encoding.ASCII.GetBytes(UserService.User.Identity.Name)));
             var sessionName = GetSessionName(userKey, "us");
 
-            //entità di prova da esportare in futuro come constanti
-            var ubiEntity = new SessionEntityType
-            {
-                Name = sessionName + "/entityTypes/ExpenseType",
-                EntityOverrideMode = new SessionEntityType.Types.EntityOverrideMode(),                
-                //TODO: capire come assegnare la property entities che però è readonly
-                //Entities = ""
-            };
+            var queryParams = new QueryParameters();
+            queryParams.SessionEntityTypes.Add(UbiSessionEntities.GetEntities(sessionName));
 
             var request = new DetectIntentRequest
             {
                 SessionAsSessionName = sessionName,
-                QueryParams = new QueryParameters
-                {
-                    //TODO: capire come assegnare la property entities che però è readonly
-                    //SessionEntityTypes = ""
-                },
+                QueryParams = queryParams,
                 QueryInput = query
             };
 
-            var dialogFlow = await client.DetectIntentAsync(
-                sessionName,
-                query
-            );
+            var dialogFlow = await client.DetectIntentAsync(request);
 
             //se la conversazione ha risolto tutti i prametri richiesti, eseguo la insert della spesa
             if (dialogFlow.QueryResult.AllRequiredParamsPresent)

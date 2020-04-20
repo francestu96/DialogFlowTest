@@ -11,9 +11,9 @@ namespace ExpenseReportDialogflow.AutoMapper
 		public ExpenseModelMapperProfile()
 		{
 			CreateMap<DetectIntentResponse, ExpenseModel>()
-				.ForMember(dest => dest.Place, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault("Place").StringValue))
-				.ForMember(dest => dest.Price, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault("Price").NumberValue))
-				.ForMember(dest => dest.ExpenseType, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault("ExpenseType").StringValue));
+				.ForMember(dest => dest.Place, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault(DialogflowConst.Place).StringValue))
+				.ForMember(dest => dest.Price, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault(DialogflowConst.Price).NumberValue))
+				.ForMember(dest => dest.ExpenseType, opt => opt.MapFrom(source => source.QueryResult.Parameters.Fields.GetValueOrDefault(DialogflowConst.ExpenseType).StringValue));
 		}
 	}
 }
